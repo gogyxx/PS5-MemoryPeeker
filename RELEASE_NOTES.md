@@ -1,4 +1,4 @@
-# PS5-MemoryPeeker v1.0.0
+# PS5-MemoryPeeker v1.2Beta
 
 Initial public release.
 
