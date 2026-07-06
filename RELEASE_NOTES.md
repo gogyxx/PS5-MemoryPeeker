@@ -1,5 +1,7 @@
 # PS5-MemoryPeeker v1.2Beta
 
+![ZIP downloads](https://img.shields.io/github/downloads/POWER-CHANGES-U/PS5-MemoryPeeker/v1.2Beta/PS5MemoryPeeker-v1.2Beta.zip?label=ZIP%20downloads)
+
 Initial public release.
 
 - PS5Debug/libdebug network connection.

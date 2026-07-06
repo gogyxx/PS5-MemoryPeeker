@@ -1,5 +1,7 @@
 # PS5-MemoryPeeker
 
+![ZIP downloads](https://img.shields.io/github/downloads/POWER-CHANGES-U/PS5-MemoryPeeker/v1.2Beta/PS5MemoryPeeker-v1.2Beta.zip?label=ZIP%20downloads)
+
 PS5-MemoryPeeker is a lightweight Windows WPF tool for reading, scanning, and editing memory from the running PS5 `eboot.bin` process through PS5Debug/libdebug.
 
 ## What It Does
