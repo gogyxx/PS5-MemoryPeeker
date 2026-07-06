@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace PS5MemoryPeeker;
@@ -104,8 +106,25 @@ public sealed class PeekerState
 {
     public ObservableCollection<ProcessItem> Processes { get; } = [];
     public ObservableCollection<MemorySection> Sections { get; } = [];
-    public ObservableCollection<ScanResultRow> Results { get; } = [];
+    public BulkObservableCollection<ScanResultRow> Results { get; } = [];
     public ObservableCollection<CheatRow> Cheats { get; } = [];
+}
+
+public sealed class BulkObservableCollection<T> : ObservableCollection<T>
+{
+    public void ReplaceAll(IEnumerable<T> items)
+    {
+        CheckReentrancy();
+        Items.Clear();
+        foreach (T item in items)
+        {
+            Items.Add(item);
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
 }
 
 public sealed class ConnectionHistoryItem

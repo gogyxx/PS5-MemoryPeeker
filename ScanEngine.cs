@@ -52,8 +52,10 @@ public sealed class ScanEngine
             {
                 ulong remaining = section.ByteLength - offset;
                 int readLength = (int)Math.Min((ulong)(ChunkSize + valueSize), remaining);
-                byte[] buffer = await _client.ReadMemoryAsync(pid, section.Start + offset, readLength, cancellationToken);
-                ScanBuffer(section, offset, buffer, valueKind, compareKind, firstNeedle, secondNeedle, valueSize, step, results);
+                byte[] buffer = await _client.ReadMemoryAsync(pid, section.Start + offset, readLength, cancellationToken).ConfigureAwait(false);
+                await Task.Run(
+                    () => ScanBuffer(section, offset, buffer, valueKind, compareKind, firstNeedle, secondNeedle, valueSize, step, results),
+                    cancellationToken).ConfigureAwait(false);
 
                 offset += ChunkSize;
                 processed += Math.Min((ulong)ChunkSize, remaining);
@@ -101,20 +103,23 @@ public sealed class ScanEngine
                 ulong start = batch[0].Address;
                 ulong end = batch.Max(r => r.Address + (ulong)valueSize);
                 int length = checked((int)(end - start));
-                byte[] window = await _client.ReadMemoryAsync(pid, start, length, token);
+                byte[] window = await _client.ReadMemoryAsync(pid, start, length, token).ConfigureAwait(false);
 
-                foreach (ScanResultRow row in batch)
+                await Task.Run(() =>
                 {
-                    int index = checked((int)(row.Address - start));
-                    byte[] current = window.AsSpan(index, valueSize).ToArray();
-                    AddNextMatch(localMatches, row, valueKind, compareKind, firstNeedle, secondNeedle, current);
-                }
+                    foreach (ScanResultRow row in batch)
+                    {
+                        int index = checked((int)(row.Address - start));
+                        byte[] current = window.AsSpan(index, valueSize).ToArray();
+                        AddNextMatch(localMatches, row, valueKind, compareKind, firstNeedle, secondNeedle, current);
+                    }
+                }, token).ConfigureAwait(false);
             }
             catch
             {
                 foreach (ScanResultRow row in batch)
                 {
-                    byte[] current = await _client.ReadMemoryAsync(pid, row.Address, valueSize, token);
+                    byte[] current = await _client.ReadMemoryAsync(pid, row.Address, valueSize, token).ConfigureAwait(false);
                     AddNextMatch(localMatches, row, valueKind, compareKind, firstNeedle, secondNeedle, current);
                 }
             }

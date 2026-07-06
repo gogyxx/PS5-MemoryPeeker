@@ -26,6 +26,46 @@
         <SolidColorBrush x:Key="PrimaryButtonHoverBrush" Color="#075FD8" />
         <SolidColorBrush x:Key="PrimaryButtonPressedBrush" Color="#064FB4" />
 
+        <Style x:Key="GoldStrokeProgressBar" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid ClipToBounds="True" SnapsToDevicePixels="True">
+                            <Grid x:Name="PART_Track"
+                                  Height="18"
+                                  ClipToBounds="True"
+                                  VerticalAlignment="Center">
+                                <Image Source="Assets/Progress/gold-stroke-progress.png"
+                                       Height="18"
+                                       Stretch="Fill"
+                                       Opacity="0.22"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Grid>
+                            <Border x:Name="PART_Indicator"
+                                    Height="18"
+                                    Background="Transparent"
+                                    ClipToBounds="True"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center">
+                                <Image Source="Assets/Progress/gold-stroke-progress.png"
+                                       Width="{Binding ActualWidth, ElementName=PART_Track}"
+                                       Height="18"
+                                       Stretch="Fill"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Padding" Value="14,6" />
@@ -371,7 +411,7 @@
                     </Border>
                 </Popup>
                 <TextBox x:Name="SecondValueBox" Grid.Row="2" Grid.Column="8" Text="" Margin="0,0,8,0" Visibility="Collapsed" />
-                <ProgressBar x:Name="ScanProgress" Grid.Row="2" Grid.Column="10" Grid.ColumnSpan="2" Height="24" Minimum="0" Maximum="100" Margin="0,5,8,5" />
+                <ProgressBar x:Name="ScanProgress" Grid.Row="2" Grid.Column="10" Grid.ColumnSpan="2" Style="{StaticResource GoldStrokeProgressBar}" Minimum="0" Maximum="100" Margin="0,5,8,5" />
                 <TextBlock x:Name="ProgressText" Grid.Row="2" Grid.Column="12" Text="0%" VerticalAlignment="Center" />
             </Grid>
         </Border>
@@ -481,7 +521,9 @@
             <DataGrid x:Name="CheatsGrid"
                       Grid.Row="1"
                       ItemsSource="{Binding Cheats}"
-                      CurrentCellChanged="CheatsGrid_CurrentCellChanged">
+                      CurrentCellChanged="CheatsGrid_CurrentCellChanged"
+                      CellEditEnding="CheatsGrid_CellEditEnding"
+                      PreviewKeyDown="CheatsGrid_PreviewKeyDown">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="On" Binding="{Binding IsActive}" Width="46" />
                     <DataGridTextColumn Header="Address" Binding="{Binding AddressText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="150" />

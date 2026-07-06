@@ -19,6 +19,7 @@
   <ItemGroup>
     <Resource Include="Assets\ps5-playstation-binary-v3.ico" />
     <Resource Include="Assets\Fonts\*.ttf" />
+    <Resource Include="Assets\Progress\*.png" />
     <Content Include="Assets\Sounds\*.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

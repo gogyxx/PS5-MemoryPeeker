@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -41,6 +42,9 @@ public partial class MainWindow : Window
     private string _connectionState = "Idle";
     private bool _ebootProbeInProgress;
     private DateTime _nextEbootProbeAt;
+    private double _displayedProgress;
+    private DateTime _lastProgressUiUpdate = DateTime.MinValue;
+    private bool _cheatWriteInProgress;
 
     private readonly record struct ConnectionProbe(
         bool PayloadReady,
@@ -66,13 +70,74 @@ public partial class MainWindow : Window
         }
 
         ApplyTheme();
+        InstallInputFilters();
         Loaded += MainWindow_Loaded;
+    }
+
+    private void InstallInputFilters()
+    {
+        IpBox.PreviewTextInput += IpBox_PreviewTextInput;
+        PortBox.PreviewTextInput += PortBox_PreviewTextInput;
+        DataObject.AddPastingHandler(IpBox, IpBox_Pasting);
+        DataObject.AddPastingHandler(PortBox, PortBox_Pasting);
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
         StartStartupUnfoldAnimation();
+    }
+
+    private static bool ContainsOnlyIpCharacters(string text)
+    {
+        return text.All(c => char.IsDigit(c) || c == '.');
+    }
+
+    private static bool ContainsOnlyDigits(string text)
+    {
+        return text.All(char.IsDigit);
+    }
+
+    private void IpBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !ContainsOnlyIpCharacters(e.Text);
+    }
+
+    private void PortBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !ContainsOnlyDigits(e.Text);
+    }
+
+    private void IpBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        PasteFilteredText(IpBox, e, c => char.IsDigit(c) || c == '.');
+    }
+
+    private void PortBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        PasteFilteredText(PortBox, e, char.IsDigit);
+    }
+
+    private static void PasteFilteredText(TextBox textBox, DataObjectPastingEventArgs e, Func<char, bool> isAllowed)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.Text) ||
+            e.DataObject.GetData(DataFormats.Text) is not string text)
+        {
+            e.CancelCommand();
+            return;
+        }
+
+        string filtered = new(text.Where(isAllowed).ToArray());
+        e.CancelCommand();
+        if (filtered.Length == 0)
+        {
+            return;
+        }
+
+        int start = textBox.SelectionStart;
+        textBox.SelectedText = filtered;
+        textBox.SelectionStart = start + filtered.Length;
+        textBox.SelectionLength = 0;
     }
 
     private void StartStartupUnfoldAnimation()
@@ -382,6 +447,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        ScanCompareKind selectedCompareKind = MemoryValueCodec.CompareFromDisplayName((string)CompareTypeBox.SelectedItem);
+        if (!ValidateScanValueInput(selectedCompareKind, isFirstScan: true))
+        {
+            return;
+        }
+
         await RunOperationAsync("Process Memory | Peeking...", async token =>
         {
             bool resumeLiveCheats = PauseLiveCheatsForOperation();
@@ -397,7 +468,6 @@ public partial class MainWindow : Window
 
                 try
                 {
-                    _state.Results.Clear();
                     MemoryValueKind valueKind = MemoryValueCodec.FromDisplayName((string)ValueTypeBox.SelectedItem);
                     ScanCompareKind compareKind = MemoryValueCodec.CompareFromDisplayName((string)CompareTypeBox.SelectedItem);
                     Progress<(double Progress, string Message)> progress = new(p => SetProgress(p.Progress, p.Message));
@@ -412,10 +482,7 @@ public partial class MainWindow : Window
                         progress,
                         token);
 
-                    foreach (ScanResultRow row in rows)
-                    {
-                        _state.Results.Add(row);
-                    }
+                    ReplaceResults(rows);
 
                     CompareTypeBox.ItemsSource = MemoryValueCodec.NextScanTypes;
                     CompareTypeBox.SelectedIndex = 0;
@@ -452,13 +519,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        ScanCompareKind selectedCompareKind = MemoryValueCodec.CompareFromDisplayName((string)CompareTypeBox.SelectedItem);
+        if (!ValidateScanValueInput(selectedCompareKind, isFirstScan: false))
+        {
+            return;
+        }
+
         await RunOperationAsync("Process Memory | Analyzing...", async token =>
         {
             bool resumeLiveCheats = PauseLiveCheatsForOperation();
             _scanStartedAt = DateTime.UtcNow;
             try
             {
-                _state.Results.Clear();
                 MemoryValueKind valueKind = MemoryValueCodec.FromDisplayName((string)ValueTypeBox.SelectedItem);
                 ScanCompareKind compareKind = MemoryValueCodec.CompareFromDisplayName((string)CompareTypeBox.SelectedItem);
                 Progress<(double Progress, string Message)> progress = new(p => SetProgress(p.Progress, p.Message));
@@ -471,10 +543,7 @@ public partial class MainWindow : Window
                     progress,
                     token);
 
-                foreach (ScanResultRow row in rows)
-                {
-                    _state.Results.Add(row);
-                }
+                ReplaceResults(rows);
 
                 ScanTimeText.Text = (DateTime.UtcNow - _scanStartedAt).ToString(@"mm\:ss\.fff");
                 SetStatus($"Next scan completed. {rows.Count:N0} matches.", true);
@@ -484,6 +553,37 @@ public partial class MainWindow : Window
                 RestoreLiveCheatsAfterOperation(resumeLiveCheats);
             }
         });
+    }
+
+    private bool ValidateScanValueInput(ScanCompareKind compareKind, bool isFirstScan)
+    {
+        bool needsNoValue = compareKind is ScanCompareKind.UnknownInitialValue or
+            ScanCompareKind.ChangedValue or
+            ScanCompareKind.UnchangedValue or
+            ScanCompareKind.FuzzyValue;
+
+        if (needsNoValue)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(ValueBox.Text))
+        {
+            SetStatus(isFirstScan
+                ? "Please input value first and then hit First Scan."
+                : "Please input value first and then hit Next Scan.");
+            ValueBox.Focus();
+            return false;
+        }
+
+        if (compareKind == ScanCompareKind.BetweenValue && string.IsNullOrWhiteSpace(SecondValueBox.Text))
+        {
+            SetStatus("Please input both values first and then scan.");
+            SecondValueBox.Focus();
+            return false;
+        }
+
+        return true;
     }
 
     private async void RefreshResults_Click(object sender, RoutedEventArgs e)
@@ -507,6 +607,14 @@ public partial class MainWindow : Window
             ResultsGrid.Items.Refresh();
             SetStatus("Visible results refreshed.", true);
         });
+    }
+
+    private void ReplaceResults(IReadOnlyList<ScanResultRow> rows)
+    {
+        using (ResultsGrid.Items.DeferRefresh())
+        {
+            _state.Results.ReplaceAll(rows);
+        }
     }
 
     private async void RefreshMemory_Click(object sender, RoutedEventArgs e)
@@ -815,7 +923,48 @@ public partial class MainWindow : Window
         CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
-        if (CheatsGrid.SelectedItem is not CheatRow { IsActive: true } cheat)
+        if (CheatsGrid.SelectedItem is CheatRow cheat)
+        {
+            await WriteEditedCheatAsync(cheat);
+        }
+    }
+
+    private async void CheatsGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction != DataGridEditAction.Commit ||
+            e.Row.Item is not CheatRow cheat ||
+            e.Column.Header?.ToString() != "Value")
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(async () =>
+        {
+            CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+            CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            await WriteEditedCheatAsync(cheat);
+        }, DispatcherPriority.Background);
+    }
+
+    private void CheatsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || CheatsGrid.CurrentColumn?.Header?.ToString() != "Value")
+        {
+            return;
+        }
+
+        CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        if (CheatsGrid.CurrentItem is CheatRow cheat)
+        {
+            e.Handled = true;
+            _ = Dispatcher.BeginInvoke(async () => await WriteEditedCheatAsync(cheat), DispatcherPriority.Background);
+        }
+    }
+
+    private async Task WriteEditedCheatAsync(CheatRow cheat)
+    {
+        if (_cheatWriteInProgress || cheat is not { IsActive: true })
         {
             return;
         }
@@ -825,14 +974,20 @@ public partial class MainWindow : Window
             return;
         }
 
+        _cheatWriteInProgress = true;
         try
         {
+            TryAttachSectionInfo(cheat);
             await WriteCheatAsync(process!.Pid, cheat, CancellationToken.None);
             SetStatus(cheat.IsLocked ? "Locked value written." : "Value written.", true);
         }
         catch (Exception ex)
         {
             SetStatus($"Value write failed: {ex.Message}");
+        }
+        finally
+        {
+            _cheatWriteInProgress = false;
         }
     }
 
@@ -1421,11 +1576,46 @@ public partial class MainWindow : Window
     private void SetProgress(double progress, string message)
     {
         double percent = Math.Clamp(progress * 100, 0, 100);
-        ScanProgress.Value = percent;
+        AnimateProgress(percent);
         ProgressText.Text = $"{percent:0}%";
-        StatusText.Text = message;
+
+        DateTime now = DateTime.UtcNow;
+        if (percent <= 0 || percent >= 100 || now - _lastProgressUiUpdate >= TimeSpan.FromMilliseconds(120))
+        {
+            StatusText.Text = message;
+            _lastProgressUiUpdate = now;
+        }
+
         _statusIsSuccess = false;
         UpdateStatusForeground();
+    }
+
+    private void AnimateProgress(double targetPercent)
+    {
+        if (targetPercent <= 0 || targetPercent >= 100)
+        {
+            ScanProgress.BeginAnimation(RangeBase.ValueProperty, null);
+            ScanProgress.Value = targetPercent;
+            _displayedProgress = targetPercent;
+            return;
+        }
+
+        double from = double.IsNaN(ScanProgress.Value) ? _displayedProgress : ScanProgress.Value;
+        if (Math.Abs(targetPercent - from) < 0.15)
+        {
+            return;
+        }
+
+        DoubleAnimation animation = new()
+        {
+            From = from,
+            To = targetPercent,
+            Duration = TimeSpan.FromMilliseconds(260),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.HoldEnd
+        };
+        animation.Completed += (_, _) => _displayedProgress = targetPercent;
+        ScanProgress.BeginAnimation(RangeBase.ValueProperty, animation, HandoffBehavior.SnapshotAndReplace);
     }
 
     private void SetStatus(string message, bool success = false)
@@ -1563,20 +1753,6 @@ public partial class MainWindow : Window
         return brush;
     }
 
-    private static Brush BuildProgressBrush()
-    {
-        LinearGradientBrush brush = new()
-        {
-            StartPoint = new Point(0, 0.5),
-            EndPoint = new Point(1, 0.5)
-        };
-        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#8B5CF6"), 0));
-        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#A855F7"), 0.5));
-        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#38BDF8"), 0.51));
-        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#0EA5E9"), 1));
-        return brush;
-    }
-
     private void ApplyThemeToChildren(
         DependencyObject parent,
         Brush foreground,
@@ -1664,8 +1840,8 @@ public partial class MainWindow : Window
                     break;
 
                 case ProgressBar progressBar:
-                    progressBar.Background = control;
-                    progressBar.Foreground = progressBar == ScanProgress ? BuildProgressBrush() : accent;
+                    progressBar.Background = progressBar == ScanProgress ? Brushes.Transparent : control;
+                    progressBar.Foreground = progressBar == ScanProgress ? ThemeBrush("#D4AF37") : accent;
                     progressBar.BorderBrush = line;
                     break;
             }
