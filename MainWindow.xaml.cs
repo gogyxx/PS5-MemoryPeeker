@@ -39,6 +39,8 @@ public partial class MainWindow : Window
     private IReadOnlyList<MemorySection>? _memoryMapCache;
     private ProcessItem? _selectedProcess;
     private string _connectionState = "Idle";
+    private bool _ebootProbeInProgress;
+    private DateTime _nextEbootProbeAt;
 
     private readonly record struct ConnectionProbe(
         bool PayloadReady,
@@ -743,6 +745,7 @@ public partial class MainWindow : Window
     {
         if (!TryGetProcess(out ProcessItem? process, quiet: true))
         {
+            await TryAutoHookEbootAsync();
             return;
         }
 
@@ -758,6 +761,52 @@ public partial class MainWindow : Window
                 SetStatus($"Live cheat write failed: {ex.Message}");
                 return;
             }
+        }
+    }
+
+    private async Task TryAutoHookEbootAsync()
+    {
+        if (_operationInProgress ||
+            _ebootProbeInProgress ||
+            !_client.IsConnected ||
+            _connectionState != "Connected" ||
+            _selectedProcess is not null ||
+            DateTime.UtcNow < _nextEbootProbeAt)
+        {
+            return;
+        }
+
+        _ebootProbeInProgress = true;
+        _nextEbootProbeAt = DateTime.UtcNow.AddSeconds(3);
+        try
+        {
+            using CancellationTokenSource probeCts = new(TimeSpan.FromSeconds(3));
+            IReadOnlyList<ProcessItem> processes = await _client.GetProcessesAsync(probeCts.Token);
+            _state.Processes.Clear();
+            foreach (ProcessItem process in processes)
+            {
+                _state.Processes.Add(process);
+            }
+
+            if (_state.Processes.Count == 0)
+            {
+                SetEbootDisplay(false);
+                return;
+            }
+
+            _selectedProcess = _state.Processes[0];
+            SetEbootDisplay(true);
+            StartMemoryMapPrefetch(_selectedProcess);
+            SetDiagnostics($"Payload: ready | {LibdebugPort}: connected | EBOOT: found", true);
+            SetStatus("EBOOT hooked automatically. Click Refresh to load process memory.", true);
+        }
+        catch
+        {
+            _nextEbootProbeAt = DateTime.UtcNow.AddSeconds(5);
+        }
+        finally
+        {
+            _ebootProbeInProgress = false;
         }
     }
 
@@ -991,8 +1040,8 @@ public partial class MainWindow : Window
         SetProgress(0, "0%");
         ScanTimeText.Text = "-";
 
-        ValueBox.Text = "0";
-        SecondValueBox.Text = "0";
+        ValueBox.Text = "";
+        SecondValueBox.Text = "";
         ValueTypeBox.SelectedIndex = 2;
         CompareTypeBox.ItemsSource = MemoryValueCodec.FirstScanTypes;
         CompareTypeBox.SelectedIndex = 0;
@@ -1511,6 +1560,20 @@ public partial class MainWindow : Window
         return brush;
     }
 
+    private static Brush BuildProgressBrush()
+    {
+        LinearGradientBrush brush = new()
+        {
+            StartPoint = new Point(0, 0.5),
+            EndPoint = new Point(1, 0.5)
+        };
+        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#8B5CF6"), 0));
+        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#A855F7"), 0.5));
+        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#38BDF8"), 0.51));
+        brush.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString("#0EA5E9"), 1));
+        return brush;
+    }
+
     private void ApplyThemeToChildren(
         DependencyObject parent,
         Brush foreground,
@@ -1599,7 +1662,7 @@ public partial class MainWindow : Window
 
                 case ProgressBar progressBar:
                     progressBar.Background = control;
-                    progressBar.Foreground = accent;
+                    progressBar.Foreground = progressBar == ScanProgress ? BuildProgressBrush() : accent;
                     progressBar.BorderBrush = line;
                     break;
             }

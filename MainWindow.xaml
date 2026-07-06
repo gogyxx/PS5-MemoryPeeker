@@ -290,7 +290,7 @@
                           IsReadOnly="True"
                           Margin="0,0,8,0" />
                 <Button x:Name="RefreshMemoryButton" Content="Refresh" Grid.Row="1" Grid.Column="6" Margin="0,0,8,0" Click="RefreshMemory_Click" />
-                <TextBox x:Name="ValueBox" Grid.Row="1" Grid.Column="8" Text="0" Margin="0,0,8,0" />
+                <TextBox x:Name="ValueBox" Grid.Row="1" Grid.Column="8" Text="" Margin="0,0,8,0" />
                 <ComboBox x:Name="ValueTypeBox" Grid.Row="1" Grid.Column="9" ItemsSource="{Binding Source={x:Static local:MemoryValueCodec.ValueTypes}}" SelectedIndex="2" Margin="0,0,8,0" />
                 <ComboBox x:Name="CompareTypeBox" Grid.Row="1" Grid.Column="10" ItemsSource="{Binding Source={x:Static local:MemoryValueCodec.FirstScanTypes}}" SelectedIndex="0" Margin="0,0,8,0" SelectionChanged="CompareTypeBox_SelectionChanged" />
                 <Button x:Name="FirstScanButton" Content="First Scan" Grid.Row="1" Grid.Column="11" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="FirstScan_Click" />
@@ -343,7 +343,7 @@
                         </StackPanel>
                     </Border>
                 </Popup>
-                <TextBox x:Name="SecondValueBox" Grid.Row="2" Grid.Column="8" Text="0" Margin="0,0,8,0" Visibility="Collapsed" />
+                <TextBox x:Name="SecondValueBox" Grid.Row="2" Grid.Column="8" Text="" Margin="0,0,8,0" Visibility="Collapsed" />
                 <ProgressBar x:Name="ScanProgress" Grid.Row="2" Grid.Column="10" Grid.ColumnSpan="2" Height="24" Minimum="0" Maximum="100" Margin="0,5,8,5" />
                 <TextBlock x:Name="ProgressText" Grid.Row="2" Grid.Column="12" Text="0%" VerticalAlignment="Center" />
             </Grid>
@@ -369,7 +369,7 @@
             </DataGrid>
 
             <Border x:Name="MemoryPanel" Grid.Column="1" Background="#FFFFFF" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Margin="12,0,0,0">
-                <Grid Margin="14">
+                <Grid Margin="16,14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -377,14 +377,32 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Process Memory" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                        <CheckBox x:Name="SelectAllBox" Content="Select All" IsChecked="False" Click="SelectAllBox_Click" Margin="0,0,12,0" />
-                        <CheckBox x:Name="FilterBox" Content="Filter" IsChecked="True" Margin="0,0,12,0" />
-                    </StackPanel>
-                    <TextBox x:Name="FilterTextBox" Grid.Row="2" Text="anon, exe, Game, dlmalloc, Sce" Margin="0,0,0,10" />
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Process Memory"
+                                   Foreground="{StaticResource InkBrush}"
+                                   VerticalAlignment="Center" />
+                        <CheckBox x:Name="SelectAllBox"
+                                  Grid.Column="1"
+                                  Content="Select All"
+                                  IsChecked="False"
+                                  Click="SelectAllBox_Click"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0" />
+                        <CheckBox x:Name="FilterBox"
+                                  Grid.Column="2"
+                                  Content="Filter"
+                                  IsChecked="True"
+                                  VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBox x:Name="FilterTextBox" Grid.Row="1" Text="anon, exe, Game, dlmalloc, Sce" Margin="0,0,0,12" />
                     <ListBox x:Name="SectionsList"
-                             Grid.Row="3"
+                             Grid.Row="2"
+                             Grid.RowSpan="2"
                              ItemsSource="{Binding Sections}"
                              BorderBrush="{StaticResource LineBrush}"
                              BorderThickness="1"
@@ -401,7 +419,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                    <Grid Grid.Row="4" Margin="0,10,0,0">
+                    <Grid Grid.Row="4" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
