@@ -42,15 +42,6 @@ The tool is focused on the running `eboot.bin` game process. It is not an ELF la
 - The payload-loader port is entered by the user because different setups use different ports.
 - If PS5Debug is already running and port `744` answers, the app connects directly.
 - If PS5Debug is not running, the app can try sending `PS5Debug.bin` when that file is placed next to the app.
-- The process display intentionally shows `EBOOT Hooked` / `EBOOT - WAITING` instead of pretending to know every game title.
-
-## What It Does Not Pretend To Do
-
-- It does not generate pointer chains.
-- It does not identify every game title by database.
-- It does not bypass PS5 jailbreak or payload compatibility requirements.
-- It does not guarantee that exported cheats work in every external cheat runner.
-- It does not make online cheating safe or acceptable.
 
 ## Building From Source
 
