@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     private readonly PeekerState _state = new();
     private readonly ObservableCollection<ConnectionHistoryItem> _history = [];
     private readonly List<MediaPlayer> _startupSoundPlayers = [];
+    private readonly MediaPlayer _backgroundMusicPlayer = new();
     private readonly IConsoleDebugClient _client = new LibdebugConsoleClient();
     private readonly DispatcherTimer _liveCheatTimer;
     private ScanEngine _scanEngine;
@@ -45,6 +47,8 @@ public partial class MainWindow : Window
     private double _displayedProgress;
     private DateTime _lastProgressUiUpdate = DateTime.MinValue;
     private bool _cheatWriteInProgress;
+    private bool _backgroundMusicMuted;
+    private bool _backgroundMusicReady;
 
     private readonly record struct ConnectionProbe(
         bool PayloadReady,
@@ -58,6 +62,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _state;
+        ResultsGrid.ItemsSource = new CompositeCollection
+        {
+            new CollectionContainer { Collection = _state.Results },
+            new CollectionContainer { Collection = _state.Cheats }
+        };
         _scanEngine = new ScanEngine(_client);
         _state.Sections.CollectionChanged += Sections_CollectionChanged;
 
@@ -72,6 +81,7 @@ public partial class MainWindow : Window
         ApplyTheme();
         InstallInputFilters();
         Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
     }
 
     private void InstallInputFilters()
@@ -172,6 +182,7 @@ public partial class MainWindow : Window
             StartupFoldOverlay.Visibility = Visibility.Collapsed;
             StartupFoldOverlay.IsHitTestVisible = false;
             StartupFoldOverlay.Opacity = 1;
+            StartBackgroundMusic();
         };
 
         storyboard.Begin(this, true);
@@ -297,6 +308,66 @@ public partial class MainWindow : Window
         catch
         {
             // Startup sound is polish only; never block the app if audio is unavailable.
+        }
+    }
+
+    private void StartBackgroundMusic()
+    {
+        try
+        {
+            if (!_backgroundMusicReady)
+            {
+                _backgroundMusicPlayer.Open(new Uri("pack://siteoforigin:,,,/Assets/Sounds/Warabe Uta.mp3", UriKind.Absolute));
+                _backgroundMusicPlayer.Volume = 0.34;
+                _backgroundMusicPlayer.MediaEnded += BackgroundMusicPlayer_MediaEnded;
+                _backgroundMusicReady = true;
+            }
+
+            if (!_backgroundMusicMuted)
+            {
+                _backgroundMusicPlayer.Play();
+            }
+        }
+        catch
+        {
+            SetStatus("Background music could not be loaded.");
+        }
+    }
+
+    private void BackgroundMusicPlayer_MediaEnded(object? sender, EventArgs e)
+    {
+        _backgroundMusicPlayer.Position = TimeSpan.Zero;
+        if (!_backgroundMusicMuted)
+        {
+            _backgroundMusicPlayer.Play();
+        }
+    }
+
+    private void SoundToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _backgroundMusicMuted = !_backgroundMusicMuted;
+        if (_backgroundMusicMuted)
+        {
+            _backgroundMusicPlayer.Pause();
+            SoundToggleButton.Content = "SOUND  🔇";
+            SoundToggleButton.Foreground = (Brush)FindResource("DangerBrush");
+            SoundToggleButton.ToolTip = "Resume background music";
+        }
+        else
+        {
+            SoundToggleButton.Content = "SOUND  🔊";
+            SoundToggleButton.Foreground = (Brush)FindResource("InkBrush");
+            SoundToggleButton.ToolTip = "Mute background music";
+            StartBackgroundMusic();
+        }
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _backgroundMusicPlayer.Close();
+        foreach (MediaPlayer player in _startupSoundPlayers)
+        {
+            player.Close();
         }
     }
 
@@ -639,7 +710,14 @@ public partial class MainWindow : Window
     {
         if (ResultsGrid.SelectedItem is ScanResultRow row)
         {
-            AddCheatFromResult(row);
+            CheatRow cheat = PromoteResult(row);
+            _ = Dispatcher.BeginInvoke(() =>
+            {
+                ResultsGrid.SelectedItem = cheat;
+                ResultsGrid.ScrollIntoView(cheat);
+                ResultsGrid.CurrentCell = new DataGridCellInfo(cheat, ResultsGrid.Columns.First(column => column.Header?.ToString() == "Value"));
+                ResultsGrid.BeginEdit();
+            }, DispatcherPriority.Input);
         }
     }
 
@@ -668,8 +746,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
         ProcessItem selectedProcess = process!;
         await RunOperationAsync("Refreshing cheat list...", async token =>
@@ -690,7 +768,7 @@ public partial class MainWindow : Window
                 read++;
             }
 
-            CheatsGrid.Items.Refresh();
+            ResultsGrid.Items.Refresh();
             SetStatus($"Cheat list refreshed. {read:N0} read, {written:N0} locked value(s) written.", true);
         });
     }
@@ -745,8 +823,8 @@ public partial class MainWindow : Window
 
     private async void ExportCheats_Click(object sender, RoutedEventArgs e)
     {
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
         if (_state.Cheats.Count == 0)
         {
@@ -918,19 +996,29 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void CheatsGrid_CurrentCellChanged(object? sender, EventArgs e)
+    private async void ResultsGrid_CurrentCellChanged(object? sender, EventArgs e)
     {
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
-        if (CheatsGrid.SelectedItem is CheatRow cheat)
+        if (ResultsGrid.SelectedItem is ScanResultRow result && (result.IsActive || result.IsLocked))
+        {
+            PromoteResult(result, result.IsLocked);
+        }
+        else if (ResultsGrid.SelectedItem is CheatRow cheat)
         {
             await WriteEditedCheatAsync(cheat);
         }
     }
 
-    private async void CheatsGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    private async void ResultsGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
     {
+        if (e.EditAction == DataGridEditAction.Commit && e.Row.Item is ScanResultRow result)
+        {
+            _ = Dispatcher.BeginInvoke(() => PromoteResult(result, result.IsLocked), DispatcherPriority.Background);
+            return;
+        }
+
         if (e.EditAction != DataGridEditAction.Commit ||
             e.Row.Item is not CheatRow cheat ||
             e.Column.Header?.ToString() != "Value")
@@ -940,22 +1028,22 @@ public partial class MainWindow : Window
 
         _ = Dispatcher.BeginInvoke(async () =>
         {
-            CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-            CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            ResultsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+            ResultsGrid.CommitEdit(DataGridEditingUnit.Row, true);
             await WriteEditedCheatAsync(cheat);
         }, DispatcherPriority.Background);
     }
 
-    private void CheatsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void ResultsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || CheatsGrid.CurrentColumn?.Header?.ToString() != "Value")
+        if (e.Key != Key.Enter || ResultsGrid.CurrentColumn?.Header?.ToString() != "Value")
         {
             return;
         }
 
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        CheatsGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        if (CheatsGrid.CurrentItem is CheatRow cheat)
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ResultsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        if (ResultsGrid.CurrentItem is CheatRow cheat)
         {
             e.Handled = true;
             _ = Dispatcher.BeginInvoke(async () => await WriteEditedCheatAsync(cheat), DispatcherPriority.Background);
@@ -1208,7 +1296,7 @@ public partial class MainWindow : Window
         FilterBox.IsChecked = true;
         FilterTextBox.Text = "anon, exe, Game, dlmalloc, Sce";
         SectionsList.Items.Refresh();
-        CheatsGrid.Items.Refresh();
+        ResultsGrid.Items.Refresh();
         UpdateSectionTotals();
         SetStatus(status, success);
     }
@@ -1320,8 +1408,23 @@ public partial class MainWindow : Window
 
     private void AddCheatFromResult(ScanResultRow row)
     {
+        PromoteResult(row);
+    }
+
+    private CheatRow PromoteResult(ScanResultRow row, bool lockValue = false)
+    {
+        CheatRow? existing = _state.Cheats.FirstOrDefault(item => item.Address == row.Address);
+        if (existing is not null)
+        {
+            existing.IsActive = true;
+            existing.IsLocked |= lockValue;
+            return existing;
+        }
+
         CheatRow cheat = new()
         {
+            IsActive = true,
+            IsLocked = lockValue,
             Address = row.Address,
             SectionStart = row.SectionStart,
             Type = row.Type,
@@ -1331,8 +1434,11 @@ public partial class MainWindow : Window
             Description = row.Section
         };
         TryAttachSectionInfo(cheat);
+        _state.Results.Remove(row);
         _state.Cheats.Add(cheat);
-        SetStatus("Result added to cheat list.", true);
+        ResultsGrid.Items.Refresh();
+        SetStatus("Address enabled and ready to edit.", true);
+        return cheat;
     }
 
     private bool TryAttachSectionInfo(CheatRow cheat)
@@ -1723,6 +1829,7 @@ public partial class MainWindow : Window
         ApplyThemeToChildren(RootGrid, foreground, muted, control, surface, line, gridLine, accent, danger);
         UpdateConnectionBadge();
         UpdateThemeToggle();
+        UpdateSoundToggle();
         UpdateThemePopupButtons(foreground, control, accent, line);
         SetDiagnostics(ConnectionDiagnosticsText.Text, _diagnosticsGood);
         UpdateStatusForeground();
@@ -1996,6 +2103,19 @@ public partial class MainWindow : Window
 
         ThemeToggleButton.Content = BuildThemeButtonContent();
         ThemeToggleButton.ToolTip = "Theme";
+    }
+
+    private void UpdateSoundToggle()
+    {
+        if (SoundToggleButton is null)
+        {
+            return;
+        }
+
+        SoundToggleButton.Content = _backgroundMusicMuted ? "SOUND  🔇" : "SOUND  🔊";
+        SoundToggleButton.Foreground = ThemeBrush(_backgroundMusicMuted
+            ? (_isOledTheme ? "#FF5A52" : "#C2413D")
+            : (_isOledTheme ? "#F8FAFC" : "#151A1E"));
     }
 
     private object BuildThemeButtonContent()

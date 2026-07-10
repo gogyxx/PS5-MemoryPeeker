@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>PS5-MemoryPeeker Web</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-alt: #fafbfc;
+      --ink: #111820;
+      --muted: #68737d;
+      --line: #d7dee6;
+      --line-soft: #edf0f3;
+      --accent: #1677ff;
+      --accent-hover: #0f69e8;
+      --accent-pressed: #0b58c7;
+      --danger: #d92d20;
+      --success: #128a4c;
+      --gold: #c79b2b;
+      --control-h: 42px;
+      --shadow: 0 12px 36px rgba(17, 24, 32, .12);
+      --progress-image: url('{{PROGRESS_DATA_URI}}');
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #000000;
+      --surface: #000000;
+      --surface-alt: #06090d;
+      --ink: #f5f8fc;
+      --muted: #a5b0bc;
+      --line: #24303d;
+      --line-soft: #17202a;
+      --accent: #1488ff;
+      --accent-hover: #0878e8;
+      --accent-pressed: #0765c3;
+      --danger: #ff5a52;
+      --success: #00e676;
+      --gold: #e3b94a;
+      --shadow: 0 12px 36px rgba(0, 0, 0, .65);
+    }
+
+    * { box-sizing: border-box; letter-spacing: 0; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.35 Satoshi, "Segoe UI", Arial, sans-serif;
+      overflow-x: hidden;
+    }
+
+    button, input, select { font: inherit; color: inherit; }
+    button, input, select {
+      height: var(--control-h);
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: var(--surface);
+    }
+    input, select { min-width: 0; padding: 0 12px; outline: none; }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    button {
+      padding: 0 18px;
+      cursor: pointer;
+      transition: background-color .14s ease, border-color .14s ease, color .14s ease, opacity .14s ease;
+    }
+    button:hover { background: var(--surface-alt); }
+    button:disabled { cursor: default; opacity: .48; }
+    button.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+    button.primary:hover { color: #fff; background: var(--accent-hover); border-color: var(--accent-hover); }
+    button.primary:active { color: #fff; background: var(--accent-pressed); border-color: var(--accent-pressed); }
+    button.danger { color: var(--danger); border-color: var(--danger); }
+    button.compact { padding: 0 12px; }
+
+    .app { min-height: 100vh; display: grid; grid-template-rows: auto auto minmax(370px, 1fr) minmax(230px, 32vh) 32px; }
+    .titlebar {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .titlebar h1 { margin: 0; font-size: 23px; font-weight: 500; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 168px minmax(190px, 1.25fr) 112px minmax(115px, .8fr) 176px minmax(230px, 1.5fr) 142px 142px;
+      grid-template-rows: var(--control-h) var(--control-h);
+      gap: 0 10px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+    .connection { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .connection strong { font-weight: 500; }
+    #connectionState { color: var(--success); }
+    .eboot {
+      height: var(--control-h);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      white-space: nowrap;
+    }
+    .eboot .emoji { margin-left: 7px; font-family: "Segoe UI Emoji", sans-serif; }
+    .subtools { grid-column: 2 / 5; display: flex; align-items: center; gap: 18px; height: 100%; }
+    .check { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; cursor: pointer; }
+    .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    .settings-tools { grid-column: 5; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    .theme-wrap { position: relative; width: 100%; }
+    #themeButton { width: 100%; }
+    #soundButton { width: 100%; padding: 0 8px; }
+    #soundButton.muted { color: var(--danger); border-color: var(--danger); }
+    .menu {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 3px);
+      left: 0;
+      width: 100%;
+      padding: 4px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .menu[hidden] { display: none; }
+    .menu button { display: block; width: 100%; margin: 0 0 4px; }
+    .menu button:last-child { margin-bottom: 0; }
+    .progress-shell { grid-column: 6 / 8; display: grid; grid-template-columns: 1fr 45px; align-items: center; gap: 10px; }
+    .progress-track {
+      position: relative;
+      height: 20px;
+      overflow: hidden;
+      background-image: var(--progress-image);
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      opacity: .18;
+    }
+    .progress-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0;
+      overflow: hidden;
+      transition: width .24s cubic-bezier(.2,.7,.2,1);
+      opacity: 1;
+    }
+    .progress-fill::before {
+      content: "";
+      display: block;
+      width: var(--progress-track-width, 900px);
+      height: 100%;
+      background-color: var(--gold);
+      -webkit-mask-image: var(--progress-image);
+      mask-image: var(--progress-image);
+      -webkit-mask-size: 100% 100%;
+      mask-size: 100% 100%;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+    }
+    #progressText { font-variant-numeric: tabular-nums; }
+
+    .workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px 14px 0; }
+    .table-shell, .memory-panel { border: 1px solid var(--line); background: var(--surface); min-height: 0; overflow: hidden; }
+    .table-scroll { width: 100%; height: 100%; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { height: 32px; padding: 5px 9px; text-align: left; border-bottom: 1px solid var(--line-soft); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 400; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface); color: var(--ink); }
+    tbody tr { cursor: default; }
+    tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+    tbody tr.selected { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+    .combined-table input[type="text"] { width: 100%; height: 28px; border: 0; background: transparent; color: var(--ink); padding: 0 4px; }
+    .combined-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
+    .combined-table tr.cheat-row { background: color-mix(in srgb, var(--success) 8%, var(--surface)); }
+    .address-col { width: 170px; } .type-col { width: 105px; } .value-col { width: 135px; } .hex-col { width: 160px; }
+    .on-col { width: 52px; } .lock-col { width: 68px; } .desc-col { width: 220px; }
+
+    .memory-panel { padding: 16px; display: grid; grid-template-rows: auto var(--control-h) minmax(0, 1fr) auto; gap: 12px; }
+    .memory-head { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; }
+    .memory-head h2 { margin: 0; font-size: 17px; font-weight: 500; }
+    .section-list { overflow: auto; border: 1px solid var(--line); background: var(--surface-alt); }
+    .section-row {
+      min-height: 38px;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 9px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .section-row:last-child { border-bottom: 0; }
+    .section-row input { width: 17px; height: 17px; accent-color: var(--accent); }
+    .section-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .section-size { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .memory-totals { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 8px; align-items: center; }
+    .counter { height: var(--control-h); display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+
+    .cheats { min-height: 0; padding: 12px 14px 0; display: block; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .actions button { min-width: 112px; }
+    .actions .gap { margin-left: 14px; }
+
+    .statusbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      overflow: hidden;
+    }
+    #statusMessage { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #scanTime { font-variant-numeric: tabular-nums; }
+
+    .empty { padding: 18px; color: var(--muted); text-align: center; }
+    .mobile-only { display: none; }
+    #loadFile { display: none; }
+    .startup-fold { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; pointer-events: all; perspective: 1200px; }
+    .startup-fold.done { pointer-events: none; }
+    .fold-panel { background: linear-gradient(145deg, #fbfcfe, #edf2f7 48%, #fff); border: 1px solid #d7dee6; transform-origin: var(--origin); animation: unfold-panel .56s cubic-bezier(.65,0,.25,1) forwards; animation-delay: var(--delay); }
+    .fold-panel:nth-child(1) { --origin: 100% 100%; --delay: 0s; }
+    .fold-panel:nth-child(2) { --origin: 0 100%; --delay: .33s; }
+    .fold-panel:nth-child(3) { --origin: 100% 0; --delay: .66s; }
+    .fold-panel:nth-child(4) { --origin: 0 0; --delay: .99s; }
+    @keyframes unfold-panel { 0% { opacity: .98; transform: rotateY(0) skewX(0); } 60% { opacity: .84; transform: rotateY(72deg) skewX(4deg); } 100% { opacity: 0; transform: rotateY(89deg) scaleX(.02); visibility: hidden; } }
+
+    @media (max-width: 1540px) {
+      .app { grid-template-rows: auto auto auto auto 32px; }
+      .toolbar { grid-template-columns: repeat(4, minmax(130px, 1fr)); grid-template-rows: repeat(4, var(--control-h)); gap: 8px 10px; }
+      .connection { grid-column: 1; } .eboot { grid-column: 2; }
+      #refreshButton { grid-column: 3; } #valueInput { grid-column: 1; grid-row: 2; }
+      #valueType { grid-column: 2; grid-row: 2; } #compareType { grid-column: 3; grid-row: 2; }
+      #firstScanButton { grid-column: 4; grid-row: 1; } #nextScanButton { grid-column: 4; grid-row: 2; }
+      .subtools { grid-column: 1 / 3; grid-row: 3; }
+      .settings-tools { grid-column: 3 / 5; grid-row: 3; }
+      .progress-shell { grid-column: 1 / 5; grid-row: 4; }
+      .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(400px, 58vh) minmax(360px, 48vh); }
+      .memory-panel { margin: 0; }
+      .cheats { min-height: 0; }
+    }
+
+    @media (max-width: 720px) {
+      :root { --control-h: 44px; }
+      .titlebar { min-height: 54px; padding: 0 12px; }
+      .titlebar h1 { font-size: 20px; }
+      .toolbar { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(7, var(--control-h)); padding: 10px; gap: 8px; }
+      .connection { grid-column: 1; } .eboot { grid-column: 2; }
+      #refreshButton { grid-column: 1; grid-row: 2; }
+      #valueInput { grid-column: 1 / 3; grid-row: 3; }
+      #valueType { grid-column: 1; grid-row: 4; } #compareType { grid-column: 2; grid-row: 4; }
+      #firstScanButton { grid-column: 1; grid-row: 5; } #nextScanButton { grid-column: 2; grid-row: 5; }
+      .subtools { grid-column: 1 / 3; grid-row: 6; }
+      .settings-tools { grid-column: 2; grid-row: 2; }
+      .progress-shell { grid-column: 1 / 3; grid-row: 7; }
+      .workspace { padding: 8px 8px 0; grid-template-rows: minmax(380px, 60vh) minmax(390px, 58vh); }
+      .memory-panel { padding: 12px; }
+      .memory-head { grid-template-columns: 1fr auto; }
+      .memory-head .filter-check { display: none; }
+      .cheats { padding: 8px 8px 0; min-height: 0; }
+      .actions { display: grid; grid-template-columns: repeat(4, 1fr); }
+      .actions button { min-width: 0; padding: 0 8px; }
+      .actions .gap { margin-left: 0; }
+      .statusbar { padding: 0 8px; }
+      .hex-col, .desc-col { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar"><h1>PS5-MemoryPeeker Web</h1></header>
+
+    <section class="toolbar" aria-label="Memory scanner controls">
+      <div class="connection"><strong>Status:</strong><span id="connectionState">Connected</span></div>
+      <div class="eboot"><span id="ebootText">EBOOT WAITING</span><span id="ebootEmoji" class="emoji">❌</span></div>
+      <button id="refreshButton" type="button">Refresh</button>
+      <input id="valueInput" autocomplete="off" inputmode="decimal" placeholder="Value" aria-label="Scan value">
+      <select id="valueType" aria-label="Value type">
+        <option value="1">1 byte</option>
+        <option value="2">2 bytes</option>
+        <option value="4" selected>4 bytes</option>
+        <option value="8">8 bytes</option>
+        <option value="pointer">Pointer</option>
+        <option value="float">Float</option>
+        <option value="double">Double</option>
+        <option value="hex">Hex</option>
+        <option value="string">String</option>
+      </select>
+      <select id="compareType" aria-label="Compare type">
+        <option value="exact">Exact Value</option>
+        <option value="fuzzy">Fuzzy Value</option>
+        <option value="bigger">Bigger Than</option>
+        <option value="smaller">Smaller Than</option>
+        <option value="between">Between Value</option>
+        <option value="unknown">Unknown Initial Value</option>
+      </select>
+      <button id="firstScanButton" class="primary" type="button">First Scan</button>
+      <button id="nextScanButton" class="primary" type="button">Next Scan</button>
+
+      <div class="subtools">
+        <label class="check"><input id="alignmentInput" type="checkbox" checked>Alignment</label>
+        <label class="check"><input id="autoPauseInput" type="checkbox">Auto pause</label>
+        <button id="stopScanButton" class="compact" type="button" disabled>Stop</button>
+      </div>
+      <div class="settings-tools">
+        <div class="theme-wrap">
+          <button id="themeButton" type="button" aria-haspopup="true" aria-expanded="false">Theme</button>
+          <div id="themeMenu" class="menu" hidden>
+            <button type="button" data-theme-choice="light">Light</button>
+            <button type="button" data-theme-choice="dark">Dark</button>
+          </div>
+        </div>
+        <button id="soundButton" type="button" aria-pressed="false" title="Mute background music">Sound 🔊</button>
+      </div>
+      <div class="progress-shell">
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <span id="progressText">0%</span>
+      </div>
+    </section>
+
+    <main class="workspace">
+      <section class="table-shell" aria-label="Scan results">
+        <div class="table-scroll">
+          <table id="resultsTable" class="combined-table">
+            <thead><tr><th class="on-col">On</th><th class="address-col">Address</th><th class="type-col">Type</th><th class="value-col">Value</th><th class="hex-col">Hex</th><th>Section</th><th class="lock-col">Lock</th><th class="desc-col">Description</th></tr></thead>
+            <tbody id="resultsBody"><tr><td class="empty" colspan="8">No scan results.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="memory-panel">
+        <div class="memory-head">
+          <h2>Process Memory</h2>
+          <label class="check"><input id="selectAllInput" type="checkbox">Select All</label>
+          <label class="check filter-check"><input id="filterEnabledInput" type="checkbox" checked>Filter</label>
+        </div>
+        <input id="sectionFilterInput" value="anon, exe, Game, dlmalloc, Sce" aria-label="Section filter">
+        <div id="sectionList" class="section-list"><div class="empty">Refresh to load EBOOT memory.</div></div>
+        <div class="memory-totals"><span>Selected:</span><div id="selectedCount" class="counter">0</div><span>Total:</span><div id="totalCount" class="counter">0</div></div>
+      </aside>
+    </main>
+
+    <section class="cheats" aria-label="Cheat actions">
+      <div class="actions">
+        <button id="newCheatButton" type="button">New</button>
+        <button id="refreshCheatsButton" type="button">Refresh</button>
+        <button id="saveCheatsButton" type="button">Save</button>
+        <button id="loadCheatsButton" type="button">Load</button>
+        <button id="pauseButton" class="gap" type="button">Pause</button>
+        <button id="resumeButton" type="button">Resume</button>
+        <button id="killButton" class="danger" type="button">Kill</button>
+        <button id="exportButton" class="primary" type="button">Export</button>
+        <input id="loadFile" type="file" accept="application/json,.json">
+      </div>
+    </section>
+
+    <footer class="statusbar"><span id="statusMessage">Ready.</span><span id="scanTime">-</span></footer>
+  </div>
+
+  <div id="startupFold" class="startup-fold" aria-hidden="true">
+    <div class="fold-panel"></div><div class="fold-panel"></div><div class="fold-panel"></div><div class="fold-panel"></div>
+  </div>
+  <audio id="backgroundMusic" src="/assets/music.mp3" loop preload="auto"></audio>
+  <audio id="foldSound" src="/assets/fold.mp3" preload="auto"></audio>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const state = { sections: [], results: [], cheats: [], selectedResult: -1, scanStarted: 0, scanTimer: 0, eboot: false, titleId: 'UNKNOWN', writingLocks: false, musicMuted: false, musicStarted: false, startupDone: false };
+    const firstCompare = [
+      ['exact','Exact Value'],['fuzzy','Fuzzy Value'],['bigger','Bigger Than'],['smaller','Smaller Than'],['between','Between Value'],['unknown','Unknown Initial Value']
+    ];
+    const nextCompare = [
+      ['exact','Exact Value'],['fuzzy','Fuzzy Value'],['increased','Increased Value'],['increasedby','Increased Value By'],
+      ['decreased','Decreased Value'],['decreasedby','Decreased Value By'],['bigger','Bigger Than'],['smaller','Smaller Than'],
+      ['changed','Changed Value'],['unchanged','Unchanged Value'],['between','Between Value']
+    ];
+
+    function setStatus(message, ok = false) {
+      $('statusMessage').textContent = message;
+      $('statusMessage').style.color = ok ? 'var(--success)' : 'var(--muted)';
+    }
+
+    function tryStartMusic() {
+      if (!state.startupDone || state.musicMuted || state.musicStarted) return;
+      const music = $('backgroundMusic');
+      music.volume = .34;
+      const started = music.play();
+      if (started && typeof started.then === 'function') {
+        started.then(() => { state.musicStarted = true; }).catch(() => {});
+      } else {
+        state.musicStarted = true;
+      }
+    }
+
+    function runStartupAudio() {
+      const source = $('foldSound');
+      [0, 330, 660, 990].forEach(delay => setTimeout(() => {
+        const sound = source.cloneNode(true);
+        sound.volume = .48;
+        sound.play().catch(() => {});
+      }, delay));
+      setTimeout(() => {
+        $('startupFold').classList.add('done');
+        $('startupFold').remove();
+        state.startupDone = true;
+        tryStartMusic();
+      }, 1600);
+    }
+
+    function toggleSound() {
+      const button = $('soundButton');
+      const music = $('backgroundMusic');
+      state.musicMuted = !state.musicMuted;
+      button.classList.toggle('muted', state.musicMuted);
+      button.setAttribute('aria-pressed', String(state.musicMuted));
+      button.textContent = state.musicMuted ? 'Sound 🔇' : 'Sound 🔊';
+      button.title = state.musicMuted ? 'Resume background music' : 'Mute background music';
+      if (state.musicMuted) music.pause();
+      else { state.musicStarted = false; tryStartMusic(); }
+    }
+
+    async function api(path, options = {}) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), options.timeout || 10000);
+      try {
+        const response = await fetch(path, { cache: 'no-store', signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        return data;
+      } finally { clearTimeout(timeout); }
+    }
+
+    function typeLabel(type) {
+      return ({'1':'1 byte','2':'2 bytes','4':'4 bytes','8':'8 bytes',float:'Float',double:'Double',hex:'Hex',string:'String'})[String(type)] || '4 bytes';
+    }
+
+    function setCompareOptions(items, selected = 'exact') {
+      $('compareType').replaceChildren(...items.map(([value, label]) => {
+        const option = document.createElement('option'); option.value = value; option.textContent = label; return option;
+      }));
+      $('compareType').value = selected;
+    }
+
+    function setProgress(percent) {
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      const track = document.querySelector('.progress-track');
+      $('progressFill').style.setProperty('--progress-track-width', `${track.clientWidth}px`);
+      $('progressFill').style.width = `${value}%`;
+      $('progressText').textContent = `${Math.round(value)}%`;
+      document.querySelector('.progress-track').setAttribute('aria-valuenow', String(Math.round(value)));
+    }
+
+    function setScanning(running) {
+      $('firstScanButton').disabled = running;
+      $('nextScanButton').disabled = running;
+      $('refreshButton').disabled = running;
+      $('stopScanButton').disabled = !running;
+    }
+
+    function updateEboot(found) {
+      state.eboot = !!found;
+      $('ebootText').textContent = found ? 'EBOOT HOOKED' : 'EBOOT WAITING';
+      $('ebootEmoji').textContent = found ? '✅' : '❌';
+      $('ebootEmoji').style.color = found ? 'var(--success)' : 'var(--danger)';
+    }
+
+    async function pollStatus() {
+      try {
+        const status = await api('/api/status', { timeout: 3000 });
+        $('connectionState').textContent = 'Connected';
+        $('connectionState').style.color = 'var(--success)';
+        const appeared = !state.eboot && status.ebootFound;
+        updateEboot(status.ebootFound);
+        state.titleId = status.titleId || state.titleId;
+        if (appeared) await refreshMemory(true);
+      } catch (_) {
+        $('connectionState').textContent = 'Disconnected';
+        $('connectionState').style.color = 'var(--danger)';
+        updateEboot(false);
+      }
+    }
+
+    function visibleSections() {
+      if (!$('filterEnabledInput').checked) return state.sections;
+      const tokens = $('sectionFilterInput').value.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+      if (!tokens.length) return state.sections;
+      const filtered = state.sections.filter(section => tokens.some(token => `${section.name} ${section.kind}`.toLowerCase().includes(token)));
+      return filtered.length ? filtered : state.sections;
+    }
+
+    function renderSections() {
+      const list = $('sectionList');
+      const shown = visibleSections();
+      list.replaceChildren();
+      if (!shown.length) { list.innerHTML = '<div class="empty">No readable memory sections.</div>'; }
+      for (const section of shown) {
+        const row = document.createElement('label'); row.className = 'section-row'; row.title = section.display;
+        const check = document.createElement('input'); check.type = 'checkbox'; check.checked = !!section.selected;
+        check.addEventListener('change', async () => {
+          check.disabled = true;
+          try {
+            const result = await api(`/api/sections/select?index=${section.index}&selected=${check.checked ? 1 : 0}`);
+            section.selected = result.selected;
+            updateSectionTotals();
+          } catch (error) { check.checked = section.selected; setStatus(error.message); }
+          finally { check.disabled = false; }
+        });
+        const name = document.createElement('span'); name.className = 'section-name'; name.textContent = section.display;
+        const size = document.createElement('span'); size.className = 'section-size'; size.textContent = formatBytes(section.length);
+        row.append(check, name, size); list.append(row);
+      }
+      updateSectionTotals();
+    }
+
+    function updateSectionTotals() {
+      const selected = state.sections.filter(section => section.selected).length;
+      $('selectedCount').textContent = String(selected);
+      $('totalCount').textContent = String(state.sections.length);
+      $('selectAllInput').checked = state.sections.length > 0 && selected === state.sections.length;
+      $('selectAllInput').indeterminate = selected > 0 && selected < state.sections.length;
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+      if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    async function refreshMemory(silent = false) {
+      if (!silent) setStatus('Refreshing EBOOT process memory...');
+      try {
+        const data = await api('/api/maps?refresh=1', { timeout: 12000 });
+        state.sections = data.sections || [];
+        updateEboot(true);
+        renderSections();
+        state.results = [];
+        renderResults();
+        setCompareOptions(firstCompare);
+        setProgress(0);
+        setStatus(`EBOOT HOOKED ✅: ${data.sections.length} sections loaded, ${data.selected} selected.`, true);
+      } catch (error) {
+        if (String(error.message).includes('eboot_not_found')) {
+          updateEboot(false); state.sections = []; renderSections(); setStatus('EBOOT WAITING ❌. Start a game; it will be detected automatically.');
+        } else setStatus(`Refresh failed: ${error.message}`);
+      }
+    }
+
+    function scanValueRequired(compare) { return !['unknown','changed','unchanged'].includes(compare); }
+
+    async function startScan(mode) {
+      if (!state.eboot) { setStatus('EBOOT WAITING ❌. Start a game first.'); return; }
+      const compare = $('compareType').value;
+      const value = $('valueInput').value.trim();
+      if (scanValueRequired(compare) && !value) {
+        setStatus(`Please input value first and then hit ${mode === 'first' ? 'First Scan' : 'Next Scan'}.`);
+        $('valueInput').focus(); return;
+      }
+      if (!state.sections.some(section => section.selected)) { setStatus('Select at least one Process Memory section first.'); return; }
+
+      const second = compare === 'between' ? prompt('Second value:') : '';
+      if (compare === 'between' && (second === null || !second.trim())) { setStatus('Please input both values first and then scan.'); return; }
+      setScanning(true); setProgress(0); state.scanStarted = performance.now(); state.results = []; renderResults();
+      setStatus(mode === 'first' ? 'Process Memory | Peeking...' : 'Process Memory | Analyzing...');
+      try {
+        const route = mode === 'first' ? '/api/scan/start' : '/api/scan/next/start';
+        const query = new URLSearchParams({ value, second: second || '', type: $('valueType').value, compare, aligned: $('alignmentInput').checked ? '1' : '0', autopause: $('autoPauseInput').checked ? '1' : '0' });
+        await api(`${route}?${query}`, { timeout: 5000 });
+        clearTimeout(state.scanTimer); state.scanTimer = setTimeout(pollScan, 120);
+      } catch (error) { setScanning(false); setStatus(`Scan could not start: ${error.message}`); }
+    }
+
+    async function pollScan() {
+      try {
+        const job = await api('/api/scan/progress', { timeout: 3500 });
+        setProgress(job.percent || 0);
+        const elapsed = (performance.now() - state.scanStarted) / 1000;
+        $('scanTime').textContent = elapsed.toFixed(3) + 's';
+        if (job.state === 'running') {
+          setStatus(`${job.message || 'Scanning'} | ${Number(job.matches || 0).toLocaleString()} matches`);
+          state.scanTimer = setTimeout(pollScan, 220); return;
+        }
+        setScanning(false);
+        if (job.state === 'completed') {
+          setProgress(100); await loadResults(); setCompareOptions(nextCompare);
+          setStatus(`${job.mode === 'first' ? 'First' : 'Next'} scan completed. ${Number(job.matches || 0).toLocaleString()} matches.`, true);
+        } else if (job.state === 'cancelled') setStatus('Scan cancelled.');
+        else setStatus(`Scan failed: ${job.error || 'unknown error'}`);
+      } catch (error) { setScanning(false); setStatus(`Lost scan status: ${error.message}`); }
+    }
+
+    async function stopScan() {
+      try { await api('/api/scan/stop'); setStatus('Stopping scan...'); }
+      catch (error) { setStatus(error.message); }
+    }
+
+    async function loadResults() {
+      const data = await api('/api/results', { timeout: 10000 });
+      state.results = data.results || [];
+      renderResults();
+    }
+
+    function renderResults() {
+      const body = $('resultsBody'); body.replaceChildren();
+      const rows = combinedRows();
+      if (!rows.length) { body.innerHTML = '<tr><td class="empty" colspan="8">No scan results or saved addresses.</td></tr>'; return; }
+      rows.forEach((item, index) => {
+        const result = item.result || item.cheat;
+        const cheat = item.cheat;
+        const row = document.createElement('tr');
+        if (state.selectedResult === index) row.classList.add('selected');
+        if (cheat?.active) row.classList.add('cheat-row');
+
+        const active = checkbox(!!cheat?.active, value => {
+          const current = ensureCheat(result);
+          current.active = value;
+          renderResults();
+        });
+        const lock = checkbox(!!cheat?.lock, value => {
+          const current = ensureCheat(result);
+          current.lock = value;
+          current.active = true;
+          renderResults();
+        });
+
+        const valueInput = document.createElement('input');
+        valueInput.type = 'text';
+        valueInput.value = cheat?.value ?? result.value ?? '';
+        valueInput.addEventListener('change', () => {
+          const current = ensureCheat(result);
+          current.value = valueInput.value.trim();
+          updateResultValue(result.address, current.value, result.hex);
+          renderResults();
+        });
+        valueInput.addEventListener('keydown', async event => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          const current = ensureCheat(result);
+          current.value = valueInput.value.trim();
+          current.active = true;
+          await writeCheat(current);
+          await refreshOneAddress(current);
+          renderResults();
+        });
+
+        const description = document.createElement('input');
+        description.type = 'text';
+        description.value = cheat?.description || result.section || '';
+        description.addEventListener('change', () => {
+          const current = ensureCheat(result);
+          current.description = description.value;
+          renderResults();
+        });
+
+        appendCell(row, active);
+        appendTextCell(row, result.address);
+        appendTextCell(row, typeLabel(result.type));
+        appendCell(row, valueInput);
+        appendTextCell(row, result.hex, 'hex-col');
+        appendTextCell(row, result.section);
+        appendCell(row, lock);
+        appendCell(row, description, 'desc-col');
+        row.addEventListener('click', () => { state.selectedResult = index; renderResults(); });
+        row.addEventListener('dblclick', event => {
+          if (event.target instanceof HTMLInputElement) return;
+          const current = ensureCheat(result);
+          current.active = true;
+          renderResults();
+          setStatus('Address enabled in the table.', true);
+        });
+        row.addEventListener('contextmenu', event => {
+          event.preventDefault();
+          const current = findCheat(result.address);
+          if (current && confirm('Remove this saved address?')) {
+            state.cheats = state.cheats.filter(saved => saved.address !== result.address);
+            renderResults();
+          }
+        });
+        body.append(row);
+      });
+    }
+
+    function combinedRows() {
+      const rows = state.results.map(result => ({ result, cheat: findCheat(result.address) }));
+      const seen = new Set(rows.map(row => row.result.address));
+      for (const cheat of state.cheats) if (!seen.has(cheat.address)) rows.push({ result: cheat, cheat });
+      return rows;
+    }
+
+    function findCheat(address) {
+      return state.cheats.find(cheat => cheat.address === address);
+    }
+
+    function addCheat(result) {
+      if (!result) return;
+      const cheat = ensureCheat(result);
+      cheat.active = true;
+      renderResults(); setStatus('Address enabled in the table.', true);
+    }
+
+    function ensureCheat(result) {
+      let cheat = findCheat(result.address);
+      if (!cheat) {
+        cheat = { active: false, address: result.address, type: result.type, value: result.value, originalHex: result.hex, section: result.section, sectionStart: result.sectionStart || '0x0', lock: false, description: result.section };
+        state.cheats.push(cheat);
+      }
+      return cheat;
+    }
+
+    function updateResultValue(address, value, hex) {
+      const result = state.results.find(item => item.address === address);
+      if (result) { result.value = value; if (hex) result.hex = hex; }
+    }
+
+    function renderCheats() {
+      renderResults();
+    }
+
+    function checkbox(checked, changed) { const input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!checked; input.addEventListener('change', () => changed(input.checked)); return input; }
+    function appendTextCell(row, text, className = '') { const cell = document.createElement('td'); if (className) cell.className = className; cell.textContent = text ?? ''; cell.title = text ?? ''; row.append(cell); }
+    function appendCell(row, node, className = '') { const cell = document.createElement('td'); if (className) cell.className = className; cell.append(node); row.append(cell); }
+    function escapeHtml(text) { const div = document.createElement('div'); div.textContent = String(text ?? ''); return div.innerHTML; }
+
+    async function writeCheat(cheat, quiet = false) {
+      if (!cheat.value) { if (!quiet) setStatus('Enter a value first.'); return false; }
+      try {
+        await api(`/api/write?addr=${encodeURIComponent(cheat.address)}&type=${encodeURIComponent(cheat.type)}&value=${encodeURIComponent(cheat.value)}`);
+        if (!quiet) setStatus(`Value written to ${cheat.address}.`, true); return true;
+      } catch (error) { if (!quiet) setStatus(`Write failed: ${error.message}`); return false; }
+    }
+
+    async function refreshOneAddress(cheat) {
+      try {
+        const size = ({'1':1,'2':2,'4':4,'8':8,float:4,double:8})[String(cheat.type)] || Math.max(1, (cheat.originalHex || '').length / 2);
+        const data = await api(`/api/read?addr=${encodeURIComponent(cheat.address)}&len=${size}&type=${encodeURIComponent(cheat.type)}`);
+        cheat.value = data.value ?? cheat.value;
+        cheat.originalHex = data.hex || cheat.originalHex;
+        updateResultValue(cheat.address, cheat.value, data.hex);
+        return true;
+      } catch (_) { return false; }
+    }
+
+    async function refreshCheats() {
+      if (!state.cheats.length) { setStatus('No addresses to refresh.'); return; }
+      setStatus('Refreshing saved addresses...');
+      for (const cheat of state.cheats) {
+        await refreshOneAddress(cheat);
+      }
+      renderResults(); setStatus('Saved addresses refreshed.', true);
+    }
+
+    async function lockTick() {
+      if (state.writingLocks) return;
+      state.writingLocks = true;
+      for (const cheat of state.cheats.filter(item => item.active && item.lock)) await writeCheat(cheat, true);
+      state.writingLocks = false;
+    }
+
+    function newCheat() {
+      const address = prompt('Address (0x...):'); if (!address) return;
+      const value = prompt('Value:'); if (value === null || value === '') return;
+      state.cheats.push({ active: true, address: address.trim(), type: $('valueType').value, value: value.trim(), originalHex: '', section: 'Manual', sectionStart: '0x0', lock: false, description: 'Manual address' });
+      renderCheats(); setStatus('Address added.', true);
+    }
+
+    function download(name, text, mime = 'application/json') {
+      const blob = new Blob([text], { type: mime }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function saveCheats() { download('PS5MemoryPeeker-cheats.json', JSON.stringify({ version: 1, titleId: state.titleId, cheats: state.cheats }, null, 2)); setStatus('Cheat table saved.', true); }
+    async function loadCheats(file) {
+      try { const data = JSON.parse(await file.text()); state.cheats = Array.isArray(data) ? data : (data.cheats || []); renderCheats(); setStatus(`Loaded ${state.cheats.length} cheat(s).`, true); }
+      catch (error) { setStatus(`Load failed: ${error.message}`); }
+    }
+
+    function valueHexForCheat(cheat) {
+      const type = String(cheat.type);
+      if (type === 'hex') return String(cheat.value).replace(/^0x/i, '').replace(/[^0-9a-f]/gi, '').padStart(2, '0').toUpperCase();
+      if (type === 'string') return [...new TextEncoder().encode(String(cheat.value))].map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+      const size = ({'1':1,'2':2,'4':4,'8':8,float:4,double:8})[type] || 4;
+      const bytes = new Uint8Array(size); const view = new DataView(bytes.buffer);
+      if (type === 'float') view.setFloat32(0, Number(cheat.value), true);
+      else if (type === 'double') view.setFloat64(0, Number(cheat.value), true);
+      else {
+        let value = BigInt(String(cheat.value).trim());
+        for (let index = 0; index < size; index++) { bytes[index] = Number(value & 255n); value >>= 8n; }
+      }
+      return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+    function originalHexForCheat(cheat) {
+      const normalized = String(cheat.originalHex || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+      return normalized || '00'.repeat(({'1':1,'2':2,'4':4,'8':8,float:4,double:8})[String(cheat.type)] || Math.max(1, valueHexForCheat(cheat).length / 2));
+    }
+    function offsetForCheat(cheat) {
+      try { const address = BigInt(cheat.address); const start = BigInt(cheat.sectionStart || 0); return (start && address >= start ? address - start : address).toString(16).toUpperCase(); }
+      catch (_) { return String(cheat.address).replace(/^0x/i, '').toUpperCase(); }
+    }
+    function shnText(active) {
+      const xml = active.map(cheat => `<Cheat Text="${xmlEscape(cheat.description || `${typeLabel(cheat.type)} @ ${cheat.address}`)}"><Cheatline><Absolute>${BigInt(cheat.sectionStart || 0) === 0n ? 'True' : 'False'}</Absolute><Section>0</Section><Offset>${offsetForCheat(cheat)}</Offset><ValueOn>${valueHexForCheat(cheat).match(/../g).join('-')}</ValueOn><ValueOff>${originalHexForCheat(cheat).match(/../g).join('-')}</ValueOff></Cheatline></Cheat>`).join('');
+      return `<?xml version="1.0" encoding="utf-16"?><Trainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Game="PS5 MemoryPeeker Export" Moder="PS5-MemoryPeeker" Cusa="${xmlEscape(state.titleId)}" Version="UNKNOWN" Process="eboot.bin"><Genres Name="Memory"/><Items/>${xml}</Trainer>`;
+    }
+    function xmlEscape(value) { return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'})[char]); }
+    const aesSbox = [
+      0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+      0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+      0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+      0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+      0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+      0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+      0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+      0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
+    ];
+    function aesXtime(value) { return ((value << 1) ^ ((value & 0x80) ? 0x1b : 0)) & 0xff; }
+    function aesExpand256(key) {
+      const expanded = new Uint8Array(240); expanded.set(key); let generated = 32, rcon = 1; const temp = new Uint8Array(4);
+      while (generated < 240) {
+        temp.set(expanded.slice(generated - 4, generated));
+        if (generated % 32 === 0) {
+          const first = temp[0]; temp[0] = aesSbox[temp[1]] ^ rcon; temp[1] = aesSbox[temp[2]]; temp[2] = aesSbox[temp[3]]; temp[3] = aesSbox[first]; rcon = aesXtime(rcon);
+        } else if (generated % 32 === 16) { for (let i = 0; i < 4; i++) temp[i] = aesSbox[temp[i]]; }
+        for (let i = 0; i < 4; i++) { expanded[generated] = expanded[generated - 32] ^ temp[i]; generated++; }
+      }
+      return expanded;
+    }
+    function aesEncryptBlock(input, expanded) {
+      const state = Uint8Array.from(input); const addKey = round => { for (let i = 0; i < 16; i++) state[i] ^= expanded[round * 16 + i]; };
+      const shiftRows = () => {
+        let t = state[1]; state[1]=state[5]; state[5]=state[9]; state[9]=state[13]; state[13]=t;
+        t=state[2]; let u=state[6]; state[2]=state[10]; state[6]=state[14]; state[10]=t; state[14]=u;
+        t=state[3]; state[3]=state[15]; state[15]=state[11]; state[11]=state[7]; state[7]=t;
+      };
+      const mix = () => { for (let c=0;c<4;c++){ const i=c*4,a=state[i],b=state[i+1],d=state[i+2],e=state[i+3],x=a^b^d^e; state[i]^=x^aesXtime(a^b); state[i+1]^=x^aesXtime(b^d); state[i+2]^=x^aesXtime(d^e); state[i+3]^=x^aesXtime(e^a); } };
+      addKey(0);
+      for (let round=1;round<14;round++){ for(let i=0;i<16;i++)state[i]=aesSbox[state[i]]; shiftRows(); mix(); addKey(round); }
+      for(let i=0;i<16;i++)state[i]=aesSbox[state[i]]; shiftRows(); addKey(14); return state;
+    }
+    function aes256CbcEncrypt(plain, key, iv) {
+      const padding = 16 - (plain.length % 16); const padded = new Uint8Array(plain.length + padding); padded.set(plain); padded.fill(padding, plain.length);
+      const expanded = aesExpand256(key); const output = new Uint8Array(padded.length); let previous = Uint8Array.from(iv);
+      for (let offset=0;offset<padded.length;offset+=16){ const block=padded.slice(offset,offset+16); for(let i=0;i<16;i++)block[i]^=previous[i]; previous=aesEncryptBlock(block,expanded); output.set(previous,offset); }
+      return output;
+    }
+    document.PS5MemoryPeekerCrypto = { aes256CbcEncrypt };
+    {
+      const ascii = value => Uint8Array.from([...value].map(char => char.charCodeAt(0)));
+      const encrypted = aes256CbcEncrypt(ascii('hello'), ascii('304c6528f659c766110239a51cl5dd9c'), ascii('u@}kzW2u[u(8DWar'));
+      const hex = [...encrypted].map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+      document.documentElement.dataset.cryptoSelfTest = hex === '405030B3C4AF8A4D0A7C2F303A942EF4' ? 'ok' : 'failed';
+    }
+    async function exportCheats() {
+      const active = state.cheats.filter(cheat => cheat.active); if (!active.length) { setStatus('Enable at least one cheat before exporting.'); return; }
+      const format = (prompt('Export format: JSON, SHN or MC4', 'JSON') || '').trim().toUpperCase();
+      if (!['JSON','SHN','MC4'].includes(format)) return;
+      if (format === 'JSON') {
+        const mods = active.map(cheat => ({ name: cheat.description || `${typeLabel(cheat.type)} @ ${cheat.address}`, type: 'checkbox', memory: [{ offset: offsetForCheat(cheat), on: valueHexForCheat(cheat), off: originalHexForCheat(cheat), absolute: !BigInt(cheat.sectionStart || 0), address: cheat.address, section: cheat.section }] }));
+        download('PS5MemoryPeeker-export.json', JSON.stringify({ name: 'PS5 MemoryPeeker Export', id: state.titleId, version: 'UNKNOWN', process: 'eboot.bin', mods, credits: ['PS5-MemoryPeeker'] }, null, 2));
+      } else if (format === 'SHN') download('PS5MemoryPeeker-export.shn', shnText(active), 'application/xml');
+      else {
+        try {
+          const key = new TextEncoder().encode('304c6528f659c766110239a51cl5dd9c'); const iv = new TextEncoder().encode('u@}kzW2u[u(8DWar');
+          const plain = new TextEncoder().encode(shnText(active));
+          let encrypted;
+          if (globalThis.crypto?.subtle) {
+            const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-CBC' }, false, ['encrypt']);
+            encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, cryptoKey, plain));
+          } else encrypted = aes256CbcEncrypt(plain, key, iv);
+          download('PS5MemoryPeeker-export.mc4', btoa(String.fromCharCode(...encrypted)), 'text/plain');
+        } catch (error) { setStatus(`MC4 export failed in this browser: ${error.message}`); return; }
+      }
+      setStatus(`Exported ${active.length} active cheat(s).`, true);
+    }
+
+    async function processAction(action) {
+      try { const data = await api(`/api/process/${action}`, { timeout: 7000 }); setStatus(data.message || `Process ${action} complete.`, true); if (action === 'kill') { updateEboot(false); state.sections = []; state.results = []; state.cheats = []; renderSections(); renderResults(); renderCheats(); } }
+      catch (error) { setStatus(`${action} failed: ${error.message}`); }
+    }
+
+    $('refreshButton').addEventListener('click', () => refreshMemory());
+    $('firstScanButton').addEventListener('click', () => startScan('first'));
+    $('nextScanButton').addEventListener('click', () => startScan('next'));
+    $('stopScanButton').addEventListener('click', stopScan);
+    $('sectionFilterInput').addEventListener('input', renderSections);
+    $('filterEnabledInput').addEventListener('change', renderSections);
+    $('selectAllInput').addEventListener('change', async event => {
+      try { const result = await api(`/api/sections/select-all?selected=${event.target.checked ? 1 : 0}`); state.sections.forEach(section => section.selected = result.selected); renderSections(); setStatus(`${result.count} memory sections selected.`, true); }
+      catch (error) { setStatus(error.message); }
+    });
+    $('themeButton').addEventListener('click', () => { const menu = $('themeMenu'); menu.hidden = !menu.hidden; $('themeButton').setAttribute('aria-expanded', String(!menu.hidden)); });
+    $('soundButton').addEventListener('click', toggleSound);
+    document.querySelectorAll('[data-theme-choice]').forEach(button => button.addEventListener('click', () => { const theme = button.dataset.themeChoice; document.documentElement.dataset.theme = theme; localStorage.setItem('ps5mp-theme', theme); $('themeMenu').hidden = true; }));
+    document.addEventListener('click', event => { if (!event.target.closest('.theme-wrap')) $('themeMenu').hidden = true; });
+    $('newCheatButton').addEventListener('click', newCheat);
+    $('refreshCheatsButton').addEventListener('click', refreshCheats);
+    $('saveCheatsButton').addEventListener('click', saveCheats);
+    $('loadCheatsButton').addEventListener('click', () => $('loadFile').click());
+    $('loadFile').addEventListener('change', event => event.target.files[0] && loadCheats(event.target.files[0]));
+    $('pauseButton').addEventListener('click', () => processAction('pause'));
+    $('resumeButton').addEventListener('click', () => processAction('resume'));
+    $('killButton').addEventListener('click', () => processAction('kill'));
+    $('exportButton').addEventListener('click', exportCheats);
+    $('valueInput').addEventListener('keydown', event => { if (event.key === 'Enter') startScan(state.results.length ? 'next' : 'first'); });
+
+    document.documentElement.dataset.theme = localStorage.getItem('ps5mp-theme') === 'dark' ? 'dark' : 'light';
+    addEventListener('pointerdown', tryStartMusic);
+    addEventListener('keydown', tryStartMusic);
+    addEventListener('resize', () => setProgress(parseFloat($('progressText').textContent) || 0));
+    setCompareOptions(firstCompare); renderCheats(); setProgress(0); pollStatus();
+    runStartupAudio();
+    setInterval(pollStatus, 1800); setInterval(lockTick, 600);
+  </script>
+</body>
+</html>

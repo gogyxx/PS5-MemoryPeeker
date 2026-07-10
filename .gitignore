@@ -7,3 +7,7 @@ obj/
 *.cache
 publish/
 PS5MemoryPeeker-publish/
+Web/build/
+Web/bin/
+Web/source/web_ui.h
+Web/source/audio_assets.h

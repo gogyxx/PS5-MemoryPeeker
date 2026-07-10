@@ -66,6 +66,9 @@ public sealed class MemorySection
 
 public sealed class ScanResultRow
 {
+    public bool IsActive { get; set; }
+    public bool IsLocked { get; set; }
+    public string Description { get; set; } = "";
     public ulong Address { get; init; }
     public string AddressText => $"0x{Address:X}";
     public ulong SectionStart { get; init; }

@@ -257,7 +257,7 @@
             <RowDefinition Height="0" />
             <RowDefinition Height="108" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="238" />
+            <RowDefinition Height="52" />
             <RowDefinition Height="30" />
         </Grid.RowDefinitions>
 
@@ -380,6 +380,16 @@
                         HorizontalContentAlignment="Center"
                         VerticalContentAlignment="Center"
                         Click="ThemeToggle_Click" />
+                <Button x:Name="SoundToggleButton"
+                        Grid.Row="2"
+                        Grid.Column="8"
+                        Content="SOUND  🔊"
+                        FontFamily="Segoe UI Emoji"
+                        Margin="0,0,8,0"
+                        ToolTip="Mute background music"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="SoundToggle_Click" />
                 <Popup x:Name="ThemePopup"
                        PlacementTarget="{Binding ElementName=ThemeToggleButton}"
                        Placement="Bottom"
@@ -424,14 +434,19 @@
 
             <DataGrid x:Name="ResultsGrid"
                       Grid.Column="0"
-                      ItemsSource="{Binding Results}"
-                      MouseDoubleClick="ResultsGrid_MouseDoubleClick">
+                      MouseDoubleClick="ResultsGrid_MouseDoubleClick"
+                      CurrentCellChanged="ResultsGrid_CurrentCellChanged"
+                      CellEditEnding="ResultsGrid_CellEditEnding"
+                      PreviewKeyDown="ResultsGrid_PreviewKeyDown">
                 <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="On" Binding="{Binding IsActive, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="46" />
                     <DataGridTextColumn Header="Address" Binding="{Binding AddressText}" Width="155" IsReadOnly="True" />
                     <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="95" IsReadOnly="True" />
-                    <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="145" IsReadOnly="True" />
+                    <DataGridTextColumn Header="Value" Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="145" />
                     <DataGridTextColumn Header="Hex" Binding="{Binding Hex}" Width="165" IsReadOnly="True" />
-                    <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="*" IsReadOnly="True" />
+                    <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="220" IsReadOnly="True" />
+                    <DataGridCheckBoxColumn Header="Lock" Binding="{Binding IsLocked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="64" />
+                    <DataGridTextColumn Header="Description" Binding="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="*" />
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -505,7 +520,6 @@
         <Grid Grid.Row="3" Margin="14,12,14,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40" />
-                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="New" Width="92" Margin="0,0,8,0" Click="NewCheat_Click" />
@@ -518,22 +532,6 @@
                 <Button Content="Export" Width="112" Style="{StaticResource PrimaryButton}" Click="ExportCheats_Click" />
             </StackPanel>
 
-            <DataGrid x:Name="CheatsGrid"
-                      Grid.Row="1"
-                      ItemsSource="{Binding Cheats}"
-                      CurrentCellChanged="CheatsGrid_CurrentCellChanged"
-                      CellEditEnding="CheatsGrid_CellEditEnding"
-                      PreviewKeyDown="CheatsGrid_PreviewKeyDown">
-                <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="On" Binding="{Binding IsActive}" Width="46" />
-                    <DataGridTextColumn Header="Address" Binding="{Binding AddressText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="150" />
-                    <DataGridComboBoxColumn Header="Type" SelectedItemBinding="{Binding TypeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding Source={x:Static local:MemoryValueCodec.ValueTypes}}" Width="105" />
-                    <DataGridTextColumn Header="Value" Binding="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="150" />
-                    <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="150" />
-                    <DataGridCheckBoxColumn Header="Lock" Binding="{Binding IsLocked}" Width="64" />
-                    <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" />
-                </DataGrid.Columns>
-            </DataGrid>
         </Grid>
 
         <Border x:Name="StatusBorder" Grid.Row="4" Background="#FFFFFF" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">

@@ -4,6 +4,8 @@
 
 PS5-MemoryPeeker is a lightweight Windows WPF tool for reading, scanning, and editing memory from the running PS5 `eboot.bin` process through PS5Debug/libdebug.
 
+The release also includes `PS5MemoryPeekerWeb.elf`, which hosts the scanner directly on the PS5 at port `1999` for use from desktop and mobile browsers.
+
 ## What It Does
 
 - Connects to PS5Debug/libdebug over the network.
@@ -14,6 +16,8 @@ PS5-MemoryPeeker is a lightweight Windows WPF tool for reading, scanning, and ed
 - Supports locked/frozen values.
 - Saves and loads cheat tables.
 - Exports active entries as JSON, SHN, or MC4.
+- Uses one editable table for scan results and active cheats.
+- Includes looping background music with a mute/resume control.
 
 ## Requirements
 
@@ -57,3 +61,5 @@ dotnet publish .\PS5MemoryPeeker.csproj -c Release -o .\publish
 ```
 
 Target framework: `net8.0-windows`
+
+The PS5-hosted Web/ELF source and build instructions are in [`Web`](Web/README.md).
