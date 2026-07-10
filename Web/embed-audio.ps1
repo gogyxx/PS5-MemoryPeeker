@@ -1,9 +1,17 @@
 param(
-    [string]$SoundRoot = (Join-Path $PSScriptRoot "..\PS5MemoryPeeker\Assets\Sounds"),
+    [string]$SoundRoot = "",
     [string]$OutputPath = (Join-Path $PSScriptRoot "source\audio_assets.h")
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($SoundRoot)) {
+    $SoundRoot = @(
+        (Join-Path $PSScriptRoot "..\Assets\Sounds"),
+        (Join-Path $PSScriptRoot "..\PS5MemoryPeeker\Assets\Sounds")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (!$SoundRoot) { throw "Audio asset folder not found." }
 
 function Add-ByteArray([Text.StringBuilder]$Builder, [string]$Name, [string]$Path) {
     if (!(Test-Path $Path)) { throw "Audio asset not found: $Path" }

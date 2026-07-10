@@ -9,7 +9,13 @@ if (!(Test-Path $InputPath)) {
     throw "Web UI not found: $InputPath"
 }
 
-$ProgressImage = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..\PS5MemoryPeeker\Assets\Progress")).Path "gold-stroke-progress.png"
+$ProgressRoots = @(
+    (Join-Path $PSScriptRoot "..\Assets\Progress"),
+    (Join-Path $PSScriptRoot "..\PS5MemoryPeeker\Assets\Progress")
+)
+$ProgressRoot = $ProgressRoots | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (!$ProgressRoot) { throw "Progress asset folder not found." }
+$ProgressImage = Join-Path (Resolve-Path $ProgressRoot).Path "gold-stroke-progress.png"
 if (!(Test-Path $ProgressImage)) {
     throw "Progress image not found: $ProgressImage"
 }
